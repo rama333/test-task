@@ -79,16 +79,16 @@ LOOP:
 		case val, ok := <-items:
 
 			if !ok {
-				goto LOOP
+				break LOOP
 			}
 			batches = append(batches, val)
 
 			if uint64(len(batches)) == maxItems {
-				goto LOOP
+				break LOOP
 			}
 
 		case <-tim:
-			goto LOOP
+			break LOOP
 		}
 	}
 
