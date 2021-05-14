@@ -2,65 +2,62 @@ package main
 
 import (
 	"context"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"os"
 	"os/signal"
 	"syscall"
-	"test-task/services"
+	"test-task/configs"
+	"test-task/internal/entity"
+	"test-task/internal/services"
 	"time"
 )
 
 func main() {
 
 	if err := run(); err != nil {
-		logrus.Fatal("failed run")
+		logrus.Fatal(err)
 	}
 
-}
-
-type ServiceRepo struct {
-	service services.Service
 }
 
 func run() error {
 
 	var st time.Time
-	var n uint64
-	var p time.Duration
 
 	defer func() {
 		logrus.WithField("shutdown_time", time.Now().Sub(st)).Info("stopped")
 	}()
 
+	config, err := configs.LoadConfig("../configs/conf.conf")
+
+	if err != nil {
+		return errors.Wrap(err, "failed load config")
+	}
+
+	err = config.Validate()
+	if err != nil {
+		return errors.Wrap(err, "failed validate config")
+	}
+
+	process := services.NewServiceProcces(config)
+
 	ctx := context.Background()
 
-	items := make(chan services.Item, n)
+	items := make(chan entity.Item, config.N)
 
-	go func(item chan services.Item) {
+	defer close(items)
+
+	go func(item chan entity.Item) {
 		for {
 			item <- struct{}{}
 			time.Sleep(100 * time.Millisecond)
 		}
 	}(items)
 
-	ser := ServiceRepo{}
+	batch := services.NewBatch(process)
 
-	n, p = ser.service.GetLimits()
-
-	go func(item chan services.Item) {
-		for {
-			select {
-			case <-ctx.Done():
-				break
-			default:
-			}
-
-			bath := Batches(items, n, p)
-			ser.service.Process(ctx, bath)
-		}
-	}(items)
-
-	defer close(items)
+	batch.RunBatches(items, ctx)
 
 	signals := make(chan os.Signal)
 	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
@@ -68,29 +65,4 @@ func run() error {
 	return nil
 }
 
-func Batches(items chan services.Item, maxItems uint64, maxTimes time.Duration) services.Batch {
 
-	batches := make(services.Batch, 0)
-
-LOOP:
-	for {
-		tim := time.After(maxTimes)
-		select {
-		case val, ok := <-items:
-
-			if !ok {
-				break LOOP
-			}
-			batches = append(batches, val)
-
-			if uint64(len(batches)) == maxItems {
-				break LOOP
-			}
-
-		case <-tim:
-			break LOOP
-		}
-	}
-
-	return batches
-}

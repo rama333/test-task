@@ -1,4 +1,4 @@
-package objectservice
+package services
 
 import (
 	"context"

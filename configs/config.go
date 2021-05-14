@@ -1,33 +1,50 @@
-package taker
+package configs
 
 import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"time"
 
 	"gopkg.in/yaml.v2"
 )
 
-type Config struct {
-	RabbitMQURI         string  `yaml:"rabbitmq_uri"`
-	RabbitMQExchange    string  `yaml:"rabbitmq_exchange"`
-	PostgresURI string `yaml:"postgres_uri"`
-	OracleURI string `yaml:"oracle_uri"`
+type configRaw struct {
+	N         uint64  `yaml:"n"`
+	P    string  `yaml:"p"`
 }
 
-func (c Config) Validate() error {
-	if c.RabbitMQURI == "" {
-		return errors.New("rabbitmq_uri is empty")
-	}
-	if c.RabbitMQExchange == "" {
-		return errors.New("rabbitmq_exchange is empty")
-	}
-	if c.PostgresURI == "" {
-		return errors.New("postgres_uri is empty")
+type Config struct {
+	configRaw
+	P time.Duration
+}
+
+func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var cRaw configRaw
+
+	err := unmarshal(&cRaw)
+	if err != nil {
+		return fmt.Errorf("YAML unmarshal: %w", err)
 	}
 
-	if c.OracleURI == "" {
-		return errors.New("oracle_uri is empty")
+	c.configRaw = cRaw
+
+
+	c.P, err = time.ParseDuration(cRaw.P)
+	if err != nil {
+		return fmt.Errorf("closed_duration parse: %w", err)
+	}
+
+	return nil
+}
+
+
+func (c Config) Validate() error {
+	if c.N != 0 {
+		return errors.New("cannot be zero")
+	}
+	if c.P != 0 {
+		return errors.New("cannot be zero")
 	}
 
 	return nil
